@@ -11,6 +11,7 @@ import Product           from './pages/Product';
 import Register          from './pages/Register';
 import Marketplace       from './pages/Marketplace';
 import BatteryDetail     from './pages/BatteryDetail';
+import PublicBatteryProfile from './pages/PublicBatteryProfile';
 import Dashboard         from './pages/Dashboard';
 import PackAnalysis      from './pages/PackAnalysis';
 import CellAnalysis      from './pages/CellAnalysis';
@@ -30,6 +31,7 @@ function App() {
           <Route path="/about"         element={<About />}        />
           <Route path="/marketplace"   element={<Marketplace />}  />
           <Route path="/battery/:id"   element={<BatteryDetail />}/>
+          <Route path="/battery-profile/:id" element={<PublicBatteryProfile />} />
           <Route path="/login"         element={<Login />}        />
           <Route path="/partner"       element={<Partner />}      />
           <Route path="/product"       element={<Product />}      />

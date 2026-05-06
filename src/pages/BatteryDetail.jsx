@@ -157,7 +157,7 @@ function UsageTab({ battery }) {
   );
 }
 
-function SellerTab({ battery, showToast }) {
+function SellerTab({ battery }) {
   return (
     <div className="py-5 space-y-5">
       <div className="flex items-start gap-4">
@@ -217,7 +217,10 @@ function BatteryDetail() {
     }
   }, [id]);
 
-  useEffect(() => { fetchBattery(); }, [fetchBattery]);
+  useEffect(() => {
+    const timer = setTimeout(() => { fetchBattery(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchBattery]);
 
   return (
     <div className="min-h-screen flex flex-col bg-light-gray">

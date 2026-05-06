@@ -36,7 +36,10 @@ function Marketplace() {
     }
   }, []);
 
-  useEffect(() => { fetchBatteries(); }, [fetchBatteries]);
+  useEffect(() => {
+    const timer = setTimeout(() => { fetchBatteries(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchBatteries]);
 
   const filtered = useMemo(() => {
     return batteries.filter((b) => {

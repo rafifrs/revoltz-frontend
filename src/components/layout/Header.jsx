@@ -11,6 +11,12 @@ const NAV_LINKS = [
   { label: 'About',       href: '/about'        },
 ];
 
+const AUTH_STATES = {
+  GUEST: 'guest',
+  CUSTOMER: 'customer',
+  WORKSHOP: 'workshop',
+};
+
 function Header() {
   const { user, isAuthenticated, logout } = useAuth();
   const { showToast } = useToast();
@@ -38,12 +44,25 @@ function Header() {
     setDropdownOpen(false);
   };
 
-  const dashboardPath = user?.role === 'workshop' ? '/workshop-dashboard' : '/marketplace';
-  const isCustomerOnlyNav = isAuthenticated && user?.role === 'customer';
-  const visibleNavLinks = isCustomerOnlyNav
+  const authState = !isAuthenticated
+    ? AUTH_STATES.GUEST
+    : user?.role === 'workshop'
+      ? AUTH_STATES.WORKSHOP
+      : AUTH_STATES.CUSTOMER;
+
+  const visibleNavLinks = authState === AUTH_STATES.CUSTOMER
     ? NAV_LINKS.filter(({ href }) => href === '/marketplace')
     : NAV_LINKS;
+
+  const dashboardPath = authState === AUTH_STATES.WORKSHOP ? '/workshop-dashboard' : '/marketplace';
+  const primaryActionLabel = authState === AUTH_STATES.WORKSHOP ? 'Dashboard' : 'Marketplace';
+  const profileActionLabel = authState === AUTH_STATES.WORKSHOP ? 'Dashboard' : 'Marketplace';
   const menuOpen = menuState.open && menuState.pathname === location.pathname;
+
+  const closeMenu = () => {
+    setMenuState({ open: false, pathname: location.pathname });
+    setDropdownOpen(false);
+  };
 
   const toggleMenu = () => {
     setMenuState((state) => (
@@ -113,7 +132,7 @@ function Header() {
                       onClick={() => { navigate(dashboardPath); setDropdownOpen(false); }}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-[#222222] hover:bg-light-gray"
                     >
-                      <User size={14} /> {user?.role === 'workshop' ? 'Dashboard' : 'Marketplace'}
+                      <User size={14} /> {profileActionLabel}
                     </button>
                     <button
                       onClick={() => { showToast({ message: 'Settings coming soon!', type: 'info' }); setDropdownOpen(false); }}
@@ -135,7 +154,7 @@ function Header() {
                 onClick={() => navigate(dashboardPath)}
                 className="px-4 py-2 text-sm font-semibold bg-deep-blue text-white rounded-lg hover:opacity-90 transition-opacity"
               >
-                {user?.role === 'workshop' ? 'Dashboard' : 'Marketplace'}
+                {primaryActionLabel}
               </button>
             </>
           ) : (
@@ -169,6 +188,7 @@ function Header() {
               <Link
                 key={label}
                 to={href}
+                onClick={closeMenu}
                 className={[
                   'flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors',
                   active ? 'text-deep-blue bg-light-gray font-semibold' : 'text-dark-gray hover:text-deep-blue hover:bg-light-gray',
@@ -183,13 +203,13 @@ function Header() {
           {isAuthenticated ? (
             <>
               <button
-                onClick={() => navigate(dashboardPath)}
+                onClick={() => { navigate(dashboardPath); closeMenu(); }}
                 className="w-full text-left px-3 py-2.5 text-sm font-semibold text-deep-blue hover:bg-light-gray rounded-lg"
               >
-                {user?.role === 'workshop' ? 'Dashboard' : 'Marketplace'}
+                {primaryActionLabel}
               </button>
               <button
-                onClick={handleLogout}
+                onClick={() => { closeMenu(); handleLogout(); }}
                 className="w-full text-left px-3 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50 rounded-lg"
               >
                 Logout
@@ -197,8 +217,8 @@ function Header() {
             </>
           ) : (
             <div className="flex gap-2 pt-1">
-              <Link to="/login" className="flex-1 text-center py-2.5 text-sm font-semibold text-deep-blue border border-deep-blue rounded-lg hover:bg-light-gray transition-colors">Login</Link>
-              <Link to="/register" className="flex-1 text-center py-2.5 text-sm font-semibold text-white bg-bright-green rounded-lg hover:opacity-90 transition-opacity">Sign Up</Link>
+              <Link to="/login" onClick={closeMenu} className="flex-1 text-center py-2.5 text-sm font-semibold text-deep-blue border border-deep-blue rounded-lg hover:bg-light-gray transition-colors">Login</Link>
+              <Link to="/register" onClick={closeMenu} className="flex-1 text-center py-2.5 text-sm font-semibold text-white bg-bright-green rounded-lg hover:opacity-90 transition-opacity">Sign Up</Link>
             </div>
           )}
         </div>

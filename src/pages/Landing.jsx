@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Battery, Leaf, Star, Building2,
@@ -8,6 +9,8 @@ import {
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import BatteryCard from '../components/specialty/BatteryCard';
+import Spinner from '../components/ui/Spinner';
+import Alert from '../components/ui/Alert';
 
 const STATS = [
   { value: '450K+',  label: 'Batteries Recovered', icon: Battery   },
@@ -39,20 +42,39 @@ const STEPS = [
   { num: '4', icon: ShoppingBag, title: 'Sell & Reuse',         desc: 'List on marketplace and connect with verified buyers.' },
 ];
 
-const SAMPLE_BATTERIES = [
-  { id: 'mkt_001', model_name: 'Tesla Model 3', chemistry: 'NMC', soh: 0.85, price: 39500000, cycles: 290, warranty_months: 12, seller_location: 'Jakarta',   seller_name: 'Jakarta EV Workshop',    rating: 4.8, verified: true },
-  { id: 'mkt_002', model_name: 'Nissan Leaf',   chemistry: 'NMC', soh: 0.80, price: 28500000, cycles: 450, warranty_months:  6, seller_location: 'Surabaya', seller_name: 'Surabaya Battery Center', rating: 4.8, verified: true },
-  { id: 'mkt_003', model_name: 'BYD Atto 3',    chemistry: 'LFP', soh: 0.88, price: 52000000, cycles: 310, warranty_months: 12, seller_location: 'Bandung',  seller_name: 'Bandung EV Solutions',   rating: 4.8, verified: true },
-];
-
 const TESTIMONIALS = [
   { name: 'Budi Santoso', role: 'Workshop Owner, Jakarta',  rating: 5, text: 'ReVoltz cut our assessment time from 2 days to 30 seconds. Revenue is up 40% since joining.' },
   { name: 'Sari Dewi',    role: 'EV Fleet Manager',         rating: 5, text: 'We replaced 12 packs through the marketplace. Every battery performed exactly as rated.' },
   { name: 'Ahmad Fauzi',  role: 'Solar Farm Operator',      rating: 5, text: 'The recycling network keeps us compliant and helps us get fair value for end-of-life batteries.' },
 ];
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 function Landing() {
   const navigate = useNavigate();
+  const [marketplaceBatteries, setMarketplaceBatteries] = useState([]);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(true);
+  const [marketplaceError, setMarketplaceError] = useState(null);
+
+  const fetchMarketplacePreview = useCallback(async () => {
+    setMarketplaceLoading(true);
+    setMarketplaceError(null);
+    try {
+      const res = await fetch(`${API_BASE}/marketplace`);
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const data = await res.json();
+      setMarketplaceBatteries((data.batteries ?? []).slice(0, 3));
+    } catch (err) {
+      setMarketplaceError(err.message || 'Failed to load marketplace preview.');
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => { fetchMarketplacePreview(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchMarketplacePreview]);
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden">
@@ -224,11 +246,37 @@ function Landing() {
               Browse AI-verified second-life batteries from trusted workshops across Indonesia.
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
-            {SAMPLE_BATTERIES.map((bat) => (
-              <BatteryCard key={bat.id} battery={bat} showWishlist={false} />
-            ))}
-          </div>
+
+          {marketplaceError && (
+            <div className="mb-6">
+              <Alert type="error" title="Marketplace preview unavailable" message={marketplaceError} />
+            </div>
+          )}
+
+          {marketplaceLoading && (
+            <div className="flex flex-col items-center justify-center py-14 gap-4 mb-8">
+              <Spinner size="lg" color="bright-green" />
+              <p className="text-dark-gray text-sm font-semibold">Loading marketplace preview…</p>
+            </div>
+          )}
+
+          {!marketplaceLoading && !marketplaceError && marketplaceBatteries.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+              {marketplaceBatteries.map((bat) => (
+                <BatteryCard key={bat.id} battery={bat} showWishlist={false} />
+              ))}
+            </div>
+          )}
+
+          {!marketplaceLoading && !marketplaceError && marketplaceBatteries.length === 0 && (
+            <div className="mb-8 rounded-[24px] border border-[#D7D7D7] bg-light-gray px-6 py-10 text-center">
+              <p className="text-lg font-bold text-deep-blue mb-2">No live marketplace listings yet</p>
+              <p className="text-sm text-dark-gray max-w-xl mx-auto">
+                Published workshop batteries will appear here automatically once they are listed from inventory.
+              </p>
+            </div>
+          )}
+
           <div className="text-center">
             <button
               onClick={() => navigate('/marketplace')}

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Activity, BatteryMedium, Boxes, CalendarClock, CircuitBoard,
-  Cpu, FlaskConical, ShieldCheck,
+  Cpu, FlaskConical, Printer, QrCode, ShieldCheck, Store,
 } from 'lucide-react';
 import Alert from '../components/ui/Alert';
 import Spinner from '../components/ui/Spinner';
@@ -11,6 +11,7 @@ import ProgressBar from '../components/ui/ProgressBar';
 import CellInputForm from '../components/forms/CellInputForm';
 import CellCompatibilityMatrix from '../components/specialty/CellCompatibilityMatrix';
 import PackAssemblyRecommendation from '../components/specialty/PackAssemblyRecommendation';
+import Button from '../components/ui/Button';
 import { useToast } from '../hooks/useToast';
 import api from '../utils/api';
 
@@ -47,6 +48,11 @@ function fmtPercent(value) {
   return `${Math.round(value * 100)}%`;
 }
 
+function fmtPrice(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
+  return `Rp ${Number(value).toLocaleString('id-ID')}`;
+}
+
 function OverviewMetric({ icon: Icon, label, value, subtext }) {
   return (
     <div className="rounded-[20px] border border-[#D7D7D7] bg-white p-5 shadow-sm">
@@ -71,6 +77,11 @@ function WorkshopBatteryDetail() {
   const [cellFormOpen, setCellFormOpen] = useState(false);
   const [cellLoading, setCellLoading] = useState(false);
   const [cellError, setCellError] = useState(null);
+  const [listingModalOpen, setListingModalOpen] = useState(false);
+  const [listingPrice, setListingPrice] = useState('');
+  const [listingLoading, setListingLoading] = useState(false);
+  const [listingError, setListingError] = useState(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   const fetchBattery = useCallback(async () => {
     setLoading(true);
@@ -130,6 +141,53 @@ function WorkshopBatteryDetail() {
     [cellResults],
   );
 
+  const marketplaceListing = battery?.marketplace_listing ?? null;
+  const publicProfileUrl = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return `${window.location.origin}/battery-profile/${id}`;
+  }, [id]);
+  const qrImageUrl = useMemo(() => {
+    if (!publicProfileUrl) return '';
+    return `https://quickchart.io/qr?size=280&text=${encodeURIComponent(publicProfileUrl)}`;
+  }, [publicProfileUrl]);
+
+  const openListingModal = () => {
+    setListingError(null);
+    setListingPrice(
+      marketplaceListing?.price !== null && marketplaceListing?.price !== undefined
+        ? String(marketplaceListing.price)
+        : '',
+    );
+    setListingModalOpen(true);
+  };
+
+  const handlePublishListing = async () => {
+    setListingLoading(true);
+    setListingError(null);
+    try {
+      const price = Number.parseInt(listingPrice, 10);
+      if (Number.isNaN(price) || price <= 0) {
+        throw new Error('Please enter a valid marketplace price.');
+      }
+
+      const res = await api.post(`/inventory/${id}/marketplace-listing`, {
+        price,
+      });
+      setBattery(res.data.battery);
+      setListingModalOpen(false);
+      showToast({
+        message: marketplaceListing ? 'Marketplace listing updated successfully!' : 'Battery added to marketplace successfully!',
+        type: 'success',
+      });
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message || 'Failed to publish battery to marketplace.';
+      setListingError(msg);
+      showToast({ message: msg, type: 'error', duration: 6000 });
+    } finally {
+      setListingLoading(false);
+    }
+  };
+
   const handleCellAnalysisSubmit = async ({ cells, assembly_request }) => {
     setCellLoading(true);
     setCellError(null);
@@ -179,6 +237,30 @@ function WorkshopBatteryDetail() {
             <p className="text-sm text-dark-gray mt-1">
               Review pack-level insight, run cell-level analysis, and revisit workshop battery intelligence.
             </p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {marketplaceListing && (
+              <span className="inline-flex items-center gap-2 rounded-full bg-[#DFF7E4] px-4 py-2 text-sm font-semibold text-deep-blue">
+                <Store size={14} aria-hidden="true" />
+                Listed at {fmtPrice(marketplaceListing.price)}
+              </span>
+            )}
+            <Button variant="secondary" size="sm" onClick={() => setQrModalOpen(true)}>
+              <QrCode size={16} className="mr-1" aria-hidden="true" />
+              Battery QR Profile
+            </Button>
+            <Button variant={marketplaceListing ? 'secondary' : 'primary'} size="sm" onClick={openListingModal}>
+              {marketplaceListing ? 'Update Marketplace Listing' : 'Add to Marketplace'}
+            </Button>
+            {marketplaceListing && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate(`/battery/${marketplaceListing.id}`)}
+              >
+                View Customer Listing
+              </Button>
+            )}
           </div>
         </div>
 
@@ -250,6 +332,25 @@ function WorkshopBatteryDetail() {
               <OverviewMetric icon={ShieldCheck} label="Recommended Action" value={battery.recommended_action ?? '—'} subtext="Current battery recommendation" />
               <OverviewMetric icon={CalendarClock} label="Last Updated" value={battery.last_updated ?? '—'} subtext="Last inventory activity" />
               <OverviewMetric icon={Boxes} label="Status" value={battery.status ?? '—'} subtext="Lifecycle status in workshop inventory" />
+            </section>
+
+            <section className="rounded-[24px] border border-[#D7D7D7] bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-bright-green mb-2">Marketplace Readiness</p>
+                  <h3 className="text-xl font-bold text-deep-blue mb-2">
+                    {marketplaceListing ? 'This battery is already visible to customers.' : 'Publish this battery to the customer marketplace.'}
+                  </h3>
+                  <p className="text-sm text-dark-gray leading-relaxed max-w-3xl">
+                    {marketplaceListing
+                      ? `Customers can now browse this battery listing with the latest AI-assessed health information. Current asking price: ${fmtPrice(marketplaceListing.price)}.`
+                      : 'Once you are happy with the AI insight, set a selling price and publish this battery so it appears in the customer marketplace.'}
+                  </p>
+                </div>
+                <Button variant={marketplaceListing ? 'secondary' : 'primary'} size="sm" onClick={openListingModal}>
+                  {marketplaceListing ? 'Update Price' : 'Set Price & Publish'}
+                </Button>
+              </div>
             </section>
 
             <section className="grid lg:grid-cols-3 gap-6 items-start">
@@ -492,6 +593,122 @@ function WorkshopBatteryDetail() {
                 )}
               </div>
             </section>
+
+            {listingModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+                <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl">
+                  <div className="flex items-start justify-between gap-4 mb-5">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-bright-green mb-2">Marketplace Listing</p>
+                      <h3 className="text-2xl font-bold text-deep-blue">
+                        {marketplaceListing ? 'Update listing price' : 'Set marketplace price'}
+                      </h3>
+                      <p className="text-sm text-dark-gray mt-2 leading-relaxed">
+                        This will make the battery visible on the customer marketplace using the current AI pack insight and workshop seller profile.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[20px] bg-light-gray p-4 mb-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7A7A7A] mb-1">Battery Snapshot</p>
+                    <p className="text-sm font-bold text-deep-blue">{battery.pack_id}</p>
+                    <p className="text-sm text-dark-gray mt-1">
+                      {battery.chemistry ?? 'Unknown chemistry'} · SoH {fmtPercent(battery.soh)} · {battery.recommended_action ?? 'Pending'}
+                    </p>
+                  </div>
+
+                  {listingError && (
+                    <div className="mb-4">
+                      <Alert type="error" title="Could not publish listing" message={listingError} dismissible onDismiss={() => setListingError(null)} />
+                    </div>
+                  )}
+
+                  <label className="block mb-5">
+                    <span className="block text-sm font-semibold text-deep-blue mb-2">Price (Rp)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={listingPrice}
+                      onChange={(e) => setListingPrice(e.target.value)}
+                      placeholder="e.g. 25000000"
+                      className="w-full rounded-xl border border-[#D7D7D7] bg-white px-4 py-3 text-base text-[#222222] outline-none focus:border-deep-blue focus:ring-2 focus:ring-deep-blue/10"
+                    />
+                  </label>
+
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setListingModalOpen(false);
+                        setListingError(null);
+                      }}
+                      disabled={listingLoading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={handlePublishListing} loading={listingLoading}>
+                      {marketplaceListing ? 'Save Listing' : 'Publish Listing'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {qrModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+                <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl">
+                  <div className="mb-5">
+                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-bright-green mb-2">Operational QR Label</p>
+                    <h3 className="text-2xl font-bold text-deep-blue">Battery QR Profile</h3>
+                    <p className="text-sm text-dark-gray mt-2 leading-relaxed">
+                      Scan this QR code to open the battery profile page with pack-level insight, cell-level analysis, and operational details. Intended for printing on offline battery packaging.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[24px] border border-[#D7D7D7] bg-light-gray p-5 mb-5">
+                    <div className="bg-white rounded-[18px] p-4 shadow-sm">
+                      <img
+                        src={qrImageUrl}
+                        alt={`QR code for battery profile ${battery?.pack_id ?? id}`}
+                        className="mx-auto h-64 w-64 rounded-[16px] bg-white object-contain"
+                      />
+                    </div>
+                    <div className="mt-4 space-y-1">
+                      <p className="text-sm font-bold text-deep-blue">{battery?.pack_id ?? id}</p>
+                      <p className="text-xs text-dark-gray break-all">{publicProfileUrl}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 flex-wrap">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        showToast({ message: 'Print label is mocked for MVP.', type: 'info' });
+                      }}
+                    >
+                      <Printer size={16} className="mr-1" aria-hidden="true" />
+                      Print Label
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setQrModalOpen(false);
+                        navigate(`/battery-profile/${id}`);
+                      }}
+                    >
+                      Open Profile
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={() => setQrModalOpen(false)}>
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
